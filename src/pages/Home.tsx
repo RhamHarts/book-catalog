@@ -14,7 +14,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('Semua')
+const [selectedCategory] = useState('Semua')
 const [bookList, setBookList] = useState<Book[]>([])
 const [nextIndex, setNextIndex] = useState(24)
 const [hasMore, setHasMore] = useState(true)
