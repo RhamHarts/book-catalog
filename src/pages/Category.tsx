@@ -1,45 +1,149 @@
-
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getBooks,
   getBooksWithDetails,
+  type Book,
   type BookDetail,
 } from '../services/bookService'
 
 function Category() {
   const { category } = useParams()
 
-  const [books, setBooks] = useState<BookDetail[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [sortBy, setSortBy] = useState('newest')
+const [bookList, setBookList] = useState<Book[]>([])
+const [books, setBooks] = useState<BookDetail[]>([])
 
-  useEffect(() => {
-    async function fetchBooks() {
-      try {
-        const data = await getBooks()
-        const detailedBooks = await getBooksWithDetails(data)
+const [loading, setLoading] = useState(true)
+const [loadingMore, setLoadingMore] = useState(false)
+const [hasMore, setHasMore] = useState(false)
+const [nextIndex, setNextIndex] = useState(24)
 
-        setBooks(detailedBooks)
-      } catch (err) {
+const [error, setError] = useState('')
+const [sortBy, setSortBy] = useState('newest')
+const [categoryIndex, setCategoryIndex] = useState(0)
+
+const observerTarget = useRef<HTMLDivElement | null>(null)
+
+// Mengambil seluruh daftar buku dan kategori dari API
+useEffect(() => {
+  let cancelled = false
+
+  async function fetchBooks() {
+    setLoading(true)
+    setError('')
+    setBooks([])
+    setNextIndex(24)
+    setHasMore(false)
+
+    try {
+      const data = await getBooks()
+
+      if (cancelled) return
+
+      setBookList(data)
+
+      // Filter buku berdasarkan kategori dari seluruh data API
+      const categoryBooks = data.filter((book) =>
+        book.c.includes(category ?? '')
+      )
+
+      // Ambil 24 detail buku pertama
+      const initialBooks = await getBooksWithDetails(
+        categoryBooks,
+        0,
+        24
+      )
+
+      if (cancelled) return
+
+      setBooks(initialBooks)
+      setHasMore(categoryBooks.length > 24)
+    } catch (err) {
+      if (!cancelled) {
         setError(
           err instanceof Error ? err.message : 'Terjadi kesalahan'
         )
-      } finally {
+      }
+    } finally {
+      if (!cancelled) {
         setLoading(false)
       }
     }
+  }
 
-    fetchBooks()
-  }, [])
+  fetchBooks()
 
-  const categories = useMemo(
-    () => [
-      ...new Set(books.flatMap((book) => book.categories)),
-    ],
-    [books]
+  return () => {
+    cancelled = true
+  }
+}, [category])
+
+// Memuat detail buku berikutnya ketika pengguna scroll
+useEffect(() => {
+  const target = observerTarget.current
+
+  if (!target || loading || loadingMore || !hasMore) {
+    return
+  }
+
+  const categoryBooks = bookList.filter((book) =>
+    book.c.includes(category ?? '')
   )
+
+  const observer = new IntersectionObserver(
+    async (entries) => {
+      if (!entries[0].isIntersecting) return
+
+      setLoadingMore(true)
+
+      try {
+        const nextBooks = await getBooksWithDetails(
+          categoryBooks,
+          nextIndex,
+          24
+        )
+
+        setBooks((prev) => [...prev, ...nextBooks])
+
+        const newIndex = nextIndex + 24
+
+        setNextIndex(newIndex)
+        setHasMore(newIndex < categoryBooks.length)
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Gagal memuat buku berikutnya'
+        )
+      } finally {
+        setLoadingMore(false)
+      }
+    },
+    {
+      rootMargin: '300px',
+    }
+  )
+
+  observer.observe(target)
+
+  return () => observer.disconnect()
+}, [bookList, category, nextIndex, loading, loadingMore, hasMore])
+
+// Kategori diambil dari seluruh daftar buku, bukan 24 detail pertama
+const categories = useMemo(
+  () => [
+    ...new Set(bookList.flatMap((book) => book.c)),
+  ],
+  [bookList]
+)
+
+const visibleCategories = categories.slice(
+  categoryIndex,
+  categoryIndex + 10
+)
+
+const maxCategoryIndex = Math.max(0, categories.length - 10)
+
 
   const filteredBooks = useMemo(() => {
     const result = books.filter((book) =>
@@ -107,28 +211,61 @@ function Category() {
           </p>
         </section>
 
-        {/* CATEGORY NAVIGATION */}
-        <section className="border-b border-gray-100 px-6 pb-8 sm:px-12 lg:px-20">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-widest text-gray-500">
-            Jelajahi kategori lainnya
-          </p>
+        
+{/* CATEGORY NAVIGATION */}
+<section className="border-b border-gray-100 px-6 pb-8 sm:px-12 lg:px-20">
+  <p className="mb-5 text-xs font-semibold uppercase tracking-widest text-gray-500">
+    Jelajahi kategori lainnya
+  </p>
 
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {categories.map((item) => (
-              <Link
-                key={item}
-                to={`/category/${encodeURIComponent(item)}`}
-                className={`shrink-0 border px-5 py-3 text-xs font-semibold transition ${
-                  item === category
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 text-gray-700 hover:border-gray-900'
-                }`}
-              >
-                {item}
-              </Link>
-            ))}
-          </div>
-        </section>
+  <div className="flex min-w-0 items-center gap-5">
+
+    {/* Previous */}
+    <button
+      onClick={() => {
+        setCategoryIndex((prev) => Math.max(0, prev - 1))
+      }}
+      disabled={categoryIndex === 0}
+      className="shrink-0 text-xl text-gray-700 transition hover:text-blue-700 disabled:opacity-20"
+      aria-label="Kategori sebelumnya"
+    >
+      &#8592;
+    </button>
+
+    {/* Category List */}
+    <div className="flex min-w-0 flex-1 items-center gap-8 overflow-hidden">
+      {visibleCategories.map((item) => (
+        <Link
+          key={item}
+          to={`/category/${encodeURIComponent(item)}`}
+          className={`shrink-0 whitespace-nowrap text-xs font-semibold uppercase tracking-wide transition ${
+            item === category
+              ? 'text-blue-800 underline decoration-2 underline-offset-4'
+              : 'text-gray-800 hover:text-blue-700'
+          }`}
+        >
+          {item}
+        </Link>
+      ))}
+    </div>
+
+    {/* Next */}
+    <button
+      onClick={() => {
+        setCategoryIndex((prev) =>
+          Math.min(maxCategoryIndex, prev + 1)
+        )
+      }}
+      disabled={categoryIndex >= maxCategoryIndex}
+      className="shrink-0 text-xl text-gray-700 transition hover:text-blue-700 disabled:opacity-20"
+      aria-label="Kategori berikutnya"
+    >
+      &#8594;
+    </button>
+
+  </div>
+</section>
+
 
         {/* CATALOG */}
         <section className="bg-primary px-6 py-10 sm:px-12 sm:py-14 lg:px-20">
@@ -224,15 +361,25 @@ function Category() {
                           <p className="mt-2 text-xs text-gray-500">
                             {book.year ?? 'Tahun tidak diketahui'}
                           </p>
+                          
                         </div>
                       </Link>
                     </article>
                   ))}
 
                 </div>
+                
               )}
             </>
           )}
+          {hasMore && (
+  <div
+    ref={observerTarget}
+    className="py-10 text-center text-sm text-gray-500"
+  >
+    {loadingMore && 'Sedang memuat buku berikutnya...'}
+  </div>
+)}
         </section>
 
         {/* FOOTER */}

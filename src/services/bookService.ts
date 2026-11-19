@@ -60,8 +60,13 @@ export async function getBookDetail(id: string): Promise<BookDetail> {
 }
 
 
-export async function getBooksWithDetails(books: Book[]): Promise<BookDetail[]> {
-  const selectedBooks = books.slice(0, 24)
+
+export async function getBooksWithDetails(
+  books: Book[],
+  startIndex = 0,
+  limit = 24
+): Promise<BookDetail[]> {
+  const selectedBooks = books.slice(startIndex, startIndex + limit)
 
   const details = await Promise.all(
     selectedBooks.map(async (book) => {
@@ -77,3 +82,4 @@ export async function getBooksWithDetails(books: Book[]): Promise<BookDetail[]> 
     (book): book is BookDetail => book !== null
   )
 }
+

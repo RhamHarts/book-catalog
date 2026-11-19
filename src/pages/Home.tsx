@@ -1,8 +1,9 @@
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getBooks,
   getBooksWithDetails,
+  type Book,
   type BookDetail,
 } from '../services/bookService'
 import { Link } from 'react-router-dom'
@@ -14,26 +15,79 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Semua')
+const [bookList, setBookList] = useState<Book[]>([])
+const [nextIndex, setNextIndex] = useState(24)
+const [hasMore, setHasMore] = useState(true)
+const [loadingMore, setLoadingMore] = useState(false)
 
+const observerTarget = useRef<HTMLDivElement | null>(null)
   
-  useEffect(() => {
-    async function fetchBooks() {
-      try {
-        const data = await getBooks()
-        const detailedBooks = await getBooksWithDetails(data)
+useEffect(() => {
+  async function fetchBooks() {
+    try {
+      const data = await getBooks()
 
-        setBooks(detailedBooks)
+      setBookList(data)
+
+      const initialBooks = await getBooksWithDetails(data, 0, 24)
+
+      setBooks(initialBooks)
+      setHasMore(data.length > 24)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Terjadi kesalahan'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  fetchBooks()
+}, [])
+
+useEffect(() => {
+  const target = observerTarget.current
+
+  if (!target || loading || loadingMore || !hasMore) {
+    return
+  }
+
+  const observer = new IntersectionObserver(
+    async (entries) => {
+      if (!entries[0].isIntersecting) return
+
+      setLoadingMore(true)
+
+      try {
+        const nextBooks = await getBooksWithDetails(
+          bookList,
+          nextIndex,
+          24
+        )
+
+        setBooks((prev) => [...prev, ...nextBooks])
+
+        const newIndex = nextIndex + 24
+
+        setNextIndex(newIndex)
+        setHasMore(newIndex < bookList.length)
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : 'Terjadi kesalahan'
+          err instanceof Error ? err.message : 'Gagal memuat buku berikutnya'
         )
       } finally {
-        setLoading(false)
+        setLoadingMore(false)
       }
+    },
+    {
+      rootMargin: '300px',
     }
+  )
 
-    fetchBooks()
-  }, [])
+  observer.observe(target)
+
+  return () => observer.disconnect()
+}, [bookList, nextIndex, loading, loadingMore, hasMore])
 
   const [categoryIndex, setCategoryIndex] = useState(0)
 
@@ -281,7 +335,14 @@ const maxCategoryIndex = Math.max(0, categories.length - 10)
               )}
             </>
           )}
-
+{!loading && !error && hasMore && (
+  <div
+    ref={observerTarget}
+    className="py-10 text-center text-sm text-gray-500"
+  >
+    {loadingMore && 'Sedang memuat buku berikutnya...'}
+  </div>
+)}
         </section>
 
         {/* FOOTER */}
