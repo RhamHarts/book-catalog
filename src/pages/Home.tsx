@@ -138,7 +138,7 @@ const maxCategoryIndex = Math.max(0, categories.length - 10)
 
                 <div>
                   <h1 className="font-serif text-xl font-semibold tracking-tight text-black">
-                    Buku Indonesia
+                    Bacantara
                   </h1>
                   <p className="text-xs text-gray-500">
                     Digital Book Catalog
@@ -348,7 +348,7 @@ const maxCategoryIndex = Math.max(0, categories.length - 10)
         {/* FOOTER */}
         <footer id="about" className="bg-white px-6 py-8 text-center sm:px-12">
           <p className="font-serif text-sm text-gray-700">
-            Buku Indonesia — Digital Book Catalog
+            Bacantara — Digital Book Catalog
           </p>
           <p className="mt-2 text-xs text-gray-400">
             Jelajahi informasi dan koleksi buku Indonesia.
